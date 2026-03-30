@@ -112,6 +112,11 @@
   .no-words-msg .icon{font-size:2.2rem;margin-bottom:10px;} .no-words-msg p{color:var(--muted);font-size:0.9rem;}
   .toast{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--ink);color:white;padding:10px 20px;border-radius:10px;font-size:0.85rem;opacity:0;pointer-events:none;transition:opacity 0.2s;z-index:100;white-space:nowrap;}
   .toast.show{opacity:1;}
+  .backup-bar{display:flex;gap:8px;margin-bottom:22px;}
+  .btn-backup{flex:1;padding:10px;border-radius:11px;border:1.5px solid var(--warm);background:var(--card-bg);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:0.84rem;font-weight:500;color:var(--muted);transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .btn-backup:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-backup.imp{background:var(--accent2);color:white;border-color:var(--accent2);}
+  .btn-backup.imp:hover{background:#3a6347;}
   .modal-overlay{position:fixed;inset:0;background:rgba(26,20,16,0.45);z-index:50;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s;padding:20px;}
   .modal{background:var(--card-bg);border-radius:20px;padding:24px;width:100%;max-width:300px;box-shadow:var(--shadow);}
   .modal h3{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:14px;}
@@ -129,6 +134,11 @@
   <div class="tabs">
     <button class="tab active" onclick="switchTab('add')">📚 Слова</button>
     <button class="tab" onclick="switchTab('practice')">🎯 Практика</button>
+  </div>
+  <div class="backup-bar">
+    <button class="btn-backup" onclick="exportData()">⬇ Експорт</button>
+    <button class="btn-backup imp" onclick="document.getElementById('import-file').click()">⬆ Імпорт</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)"/>
   </div>
 
   <div class="panel active" id="panel-add">
@@ -370,6 +380,42 @@ function updateStats(){document.getElementById('s-ok').textContent=stats.ok;docu
 function updateProg(){const d=idx%(queue.length||1),p=queue.length?(d/queue.length*100):0;document.getElementById('prog').style.width=p+'%';}
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2300);}
+
+function exportData(){
+  const data={lessons,words,exported:new Date().toISOString()};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='wordcards-backup.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Збережено! 💾');
+}
+
+function importData(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const data=JSON.parse(ev.target.result);
+      if(!data.lessons||!data.words){showToast('Невірний файл!');return;}
+      if(!confirm(`Імпортувати ${data.lessons.length} уроків і ${data.words.length} слів?\n\nПоточні дані будуть об'єднані.`))return;
+      // merge: add only non-duplicate lessons and words
+      data.lessons.forEach(l=>{
+        if(!lessons.find(x=>x.name===l.name))lessons.push(l);
+      });
+      data.words.forEach(w=>{
+        if(!words.find(x=>x.eng===w.eng&&x.lessonId===w.lessonId))words.push(w);
+      });
+      save();renderSidebar();renderContent();
+      showToast(`Імпортовано! 🎉`);
+    }catch(err){showToast('Помилка читання файлу');}
+    e.target.value='';
+  };
+  reader.readAsText(file);
+}
 
 renderSidebar();renderContent();
 if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
