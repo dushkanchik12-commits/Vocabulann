@@ -126,6 +126,20 @@
   .modal-btns button{flex:1;padding:11px;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:0.88rem;font-weight:500;border:none;transition:all 0.15s;}
   .btn-confirm{background:var(--accent);color:white;} .btn-confirm:hover{background:#a84e22;}
   .btn-cancel{background:var(--warm);color:var(--muted);} .btn-cancel:hover{color:var(--ink);}
+  .all-words-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .all-words-header h2{font-family:'Playfair Display',serif;font-size:1.25rem;}
+  .sort-toggle{display:flex;gap:5px;}
+  .sort-btn{padding:7px 12px;border-radius:8px;border:1.5px solid var(--warm);background:none;cursor:pointer;font-size:0.78rem;font-weight:500;color:var(--muted);transition:all 0.2s;font-family:'DM Sans',sans-serif;}
+  .sort-btn.active{background:var(--ink);color:white;border-color:var(--ink);}
+  .all-lesson-group{margin-bottom:20px;}
+  .all-lesson-title{font-size:0.7rem;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;padding:4px 0;border-bottom:1px solid var(--warm);}
+  .all-word-item{display:flex;align-items:center;background:var(--card-bg);border-radius:10px;padding:9px 12px;margin-bottom:5px;gap:5px;}
+  .all-word-item.starred{background:#fef9ec;border-left:3px solid var(--gold);}
+  .all-word-item .eng{font-weight:500;flex:1;font-size:0.9rem;}
+  .all-word-item .arr{color:var(--muted);margin:0 4px;font-size:0.8rem;flex-shrink:0;}
+  .all-word-item .ukr{color:var(--accent2);flex:1.4;font-size:0.88rem;word-break:break-word;}
+  .all-word-item .tag{font-size:0.65rem;background:var(--warm);padding:2px 7px;border-radius:8px;color:var(--muted);flex-shrink:0;white-space:nowrap;}
+  .all-empty{text-align:center;color:var(--muted);font-size:0.9rem;padding:40px 20px;}
 </style>
 </head>
 <body>
@@ -133,6 +147,7 @@
   <header><h1>Word<span>Cards</span></h1><p>Твій особистий словник</p></header>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('add')">📚 Слова</button>
+    <button class="tab" onclick="switchTab('all')">🔤 Всі слова</button>
     <button class="tab" onclick="switchTab('practice')">🎯 Практика</button>
   </div>
   <div class="backup-bar">
@@ -152,6 +167,17 @@
         <div class="no-lesson-sel"><div class="icon">📖</div><p>Вибери урок зліва<br>або створи новий</p></div>
       </div>
     </div>
+  </div>
+
+  <div class="panel" id="panel-all">
+    <div class="all-words-header">
+      <h2>Всі слова</h2>
+      <div class="sort-toggle">
+        <button class="sort-btn active" id="sort-lesson" onclick="setSort('lesson')">За уроком</button>
+        <button class="sort-btn" id="sort-alpha" onclick="setSort('alpha')">А → Я</button>
+      </div>
+    </div>
+    <div id="all-words-container"></div>
   </div>
 
   <div class="panel" id="panel-practice">
@@ -214,13 +240,49 @@ let words=JSON.parse(localStorage.getItem('wc-words2')||'[]');
 (function(){const old=JSON.parse(localStorage.getItem('wc-words')||'[]');if(!lessons.length&&old.length){const l={id:Date.now(),name:'Урок 1'};lessons.push(l);words=old.map(w=>({...w,lessonId:l.id,starred:false}));save();setTimeout(()=>showToast('Старі слова → Урок 1 ✓'),600);}})();
 function save(){localStorage.setItem('wc-lessons',JSON.stringify(lessons));localStorage.setItem('wc-words2',JSON.stringify(words));}
 
-let activeLesson=null,direction='both',queue=[],idx=0,stats={ok:0,err:0},answered=false,hintUsed=false,selLessons=new Set(),onlyStarred=false;
+let activeLesson=null,direction='both',queue=[],idx=0,stats={ok:0,err:0},answered=false,hintUsed=false,selLessons=new Set(),onlyStarred=false,sortMode='lesson';
 
 function switchTab(t){
-  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',(i===0&&t==='add')||(i===1&&t==='practice')));
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',(i===0&&t==='add')||(i===1&&t==='all')||(i===2&&t==='practice')));
   document.getElementById('panel-add').classList.toggle('active',t==='add');
+  document.getElementById('panel-all').classList.toggle('active',t==='all');
   document.getElementById('panel-practice').classList.toggle('active',t==='practice');
   if(t==='practice')renderPracticeTab();
+  if(t==='all')renderAllWords();
+}
+
+function setSort(mode){
+  sortMode=mode;
+  document.getElementById('sort-lesson').classList.toggle('active',mode==='lesson');
+  document.getElementById('sort-alpha').classList.toggle('active',mode==='alpha');
+  renderAllWords();
+}
+
+function renderAllWords(){
+  const el=document.getElementById('all-words-container');
+  if(!words.length){el.innerHTML='<div class="all-empty">Ще немає слів 📚</div>';return;}
+
+  if(sortMode==='alpha'){
+    const sorted=[...words].sort((a,b)=>a.eng.localeCompare(b.eng));
+    el.innerHTML=sorted.map(w=>{
+      const lessonName=lessons.find(l=>l.id===w.lessonId)?.name||'';
+      return `<div class="all-word-item${w.starred?' starred':''}">
+        <span class="eng">${w.eng}</span><span class="arr">→</span><span class="ukr">${w.ukr}</span>
+        <span class="tag">${lessonName}</span>
+      </div>`;
+    }).join('');
+  } else {
+    el.innerHTML=lessons.map(l=>{
+      const lw=words.filter(w=>w.lessonId===l.id);
+      if(!lw.length)return'';
+      return`<div class="all-lesson-group">
+        <div class="all-lesson-title">${l.name} — ${lw.length} слів</div>
+        ${lw.map(w=>`<div class="all-word-item${w.starred?' starred':''}">
+          <span class="eng">${w.eng}</span><span class="arr">→</span><span class="ukr">${w.ukr}</span>
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+  }
 }
 
 function renderSidebar(){
